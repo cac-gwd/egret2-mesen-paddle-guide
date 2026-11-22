@@ -1,4 +1,4 @@
-# EGRET II mini: five configurable buttons -> Mesen keyboard input.
+# EGRET II mini: five configurable buttons -> global keyboard input.
 # Windows PowerShell 5.1 / PowerShell 7. Keep all companion files together.
 [CmdletBinding()]
 param(
@@ -50,7 +50,7 @@ try {
             $keys.Add($name, $value)
         }
     }
-    Write-Host 'EGRET II mini -> Mesen: configurable buttons' -ForegroundColor Cyan
+    Write-Host 'EGRET II mini -> All applications: configurable buttons' -ForegroundColor Cyan
     foreach ($name in $names) {
         $label = if ([string]::IsNullOrEmpty($keys[$name])) { '(disabled)' } else { $keys[$name] }
         Write-Host ('  {0,-10} -> {1}' -f $name, $label)
@@ -61,7 +61,8 @@ try {
     $capture = New-Object EgretButtons.Capture
     $capture.Start($TSharkPath, $CaptureInterface, $keys)
     Write-Host "Starting $CaptureInterface monitoring. Plug the TAITO controller in now." -ForegroundColor Green
-    Write-Host 'Keep Mesen in the foreground. Ctrl+C here stops capture and releases keys.'
+    Write-Host 'Input target: ALL APPLICATIONS (the foreground app receives keys).'
+    Write-Host 'Ctrl+C here stops capture and releases keys.'
     while ($capture.IsRunning) {
         foreach ($message in $capture.DrainMessages()) { Write-Host $message }
         Start-Sleep -Milliseconds 50

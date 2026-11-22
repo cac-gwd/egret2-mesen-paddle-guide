@@ -56,8 +56,6 @@ namespace EgretButtons
         private readonly byte[] keys = new byte[5];
         private HashSet<byte> sent = new HashSet<byte>();
         private int physical;
-        private int blocked;
-        private bool focused;
 
         public ButtonState(IDictionary<string, string> mapping)
         {
@@ -84,34 +82,24 @@ namespace EgretButtons
             return true;
         }
 
-        public List<KeyChange> SetFocus(bool active)
-        {
-            focused = active;
-            if (!active) blocked |= physical;
-            return Reconcile();
-        }
-
         public List<KeyChange> Report(int mask)
         {
             physical = mask & 31;
-            blocked &= physical;
-            if (!focused) blocked |= physical;
             return Reconcile();
         }
 
         public List<KeyChange> Reset()
         {
             physical = 0;
-            blocked = 0;
             return Reconcile();
         }
 
         private List<KeyChange> Reconcile()
         {
             HashSet<byte> desired = new HashSet<byte>();
-            if (focused)
-                for (int i = 0; i < keys.Length; i++)
-                    if ((physical & ~blocked & (1 << i)) != 0 && keys[i] != 0) desired.Add(keys[i]);
+            // Global keyboard input: application focus does not gate button state.
+            for (int i = 0; i < keys.Length; i++)
+                if ((physical & (1 << i)) != 0 && keys[i] != 0) desired.Add(keys[i]);
             List<KeyChange> changes = new List<KeyChange>();
             foreach (byte key in sent) if (!desired.Contains(key)) changes.Add(new KeyChange(key, false));
             foreach (byte key in desired) if (!sent.Contains(key)) changes.Add(new KeyChange(key, true));
@@ -163,30 +151,40 @@ namespace EgretButtons
         }
     }
 
+    // MAME's win32 provider identifies keys from the message scan code.
+    // Sending only a virtual key (scan code 0) works in some apps but not MAME.
+    public sealed class KeyboardPacket
+    {
+        [DllImport("user32.dll", ExactSpelling = true)]
+        private static extern uint MapVirtualKeyW(uint code, uint mapType);
+
+        public byte Key { get; private set; }
+        public byte ScanCode { get; private set; }
+        public uint Flags { get; private set; }
+
+        public KeyboardPacket(byte key, bool down)
+        {
+            // MAPVK_VK_TO_VSC_EX includes the E0 prefix for navigation keys.
+            uint scan = MapVirtualKeyW(key, 4);
+            if ((scan & 0xFF) == 0)
+                throw new ArgumentException("No keyboard scan code for virtual key " + key);
+            Key = key;
+            ScanCode = (byte)(scan & 0xFF);
+            // Keep dedicated navigation keys distinct from their numpad equivalents,
+            // including layouts that return the scan without its E0 prefix.
+            bool navigation = (key >= 0x21 && key <= 0x28) || key == 0x2D || key == 0x2E;
+            Flags = (((scan & 0xFF00) == 0xE000 || navigation) ? 1u : 0u) | (down ? 0u : 2u);
+        }
+    }
+
     internal static class NativeKeys
     {
-        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
-        [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
         [DllImport("user32.dll")] private static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
-
-        internal static bool IsMesenActive()
-        {
-            uint pid;
-            GetWindowThreadProcessId(GetForegroundWindow(), out pid);
-            if (pid == 0) return false;
-            try
-            {
-                using (Process process = Process.GetProcessById((int)pid))
-                    return process.ProcessName.IndexOf("mesen", StringComparison.OrdinalIgnoreCase) >= 0;
-            }
-            catch { return false; }
-        }
 
         internal static void Send(KeyChange change)
         {
-            // Same injection API as the working original, with separate down/up.
-            bool extended = change.Key >= 0x21 && change.Key <= 0x2E;
-            keybd_event(change.Key, 0, (extended ? 1u : 0u) | (change.Down ? 0u : 2u), UIntPtr.Zero);
+            KeyboardPacket packet = new KeyboardPacket(change.Key, change.Down);
+            keybd_event(packet.Key, packet.ScanCode, packet.Flags, UIntPtr.Zero);
         }
     }
 
@@ -246,8 +244,6 @@ namespace EgretButtons
                 Task<string> pending = process.StandardOutput.ReadLineAsync();
                 while (!stop.IsCancellationRequested)
                 {
-                    // Poll focus even without reports, so focus loss always releases keys.
-                    Apply(router.State.SetFocus(NativeKeys.IsMesenActive()));
                     int count = 0;
                     while (pending.IsCompleted && count++ < 256 && !stop.IsCancellationRequested)
                     {

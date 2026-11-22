@@ -18,7 +18,6 @@ $loader = [scriptblock]::Create($ast.Extent.Text.Substring($loaderStart, $loader
 $ConfigPath = Join-Path $PSScriptRoot '..\scripts\buttons.json'
 . $loader
 $loaded = New-Object EgretButtons.ButtonState -ArgumentList $keys
-[void]$loaded.SetFocus($true)
 if ($loaded.Report(12).Count -ne 0) { throw 'JSON null must disable the two upper buttons.' }
 $changes = $loaded.Report(3)
 if ($changes.Count -ne 1 -or $changes[0].Key -ne 32 -or -not $changes[0].Down) { throw 'JSON Space mappings were not loaded.' }
@@ -126,7 +125,7 @@ public static class EgretCaptureFixture {
                 }
                 $stdout = $stdoutTask.GetAwaiter().GetResult()
                 $stderr = $stderrTask.GetAwaiter().GetResult()
-                foreach ($expected in @('right\s+-> Space', 'left\s+-> Space', 'topLeft\s+-> \(disabled\)', 'topRight\s+-> \(disabled\)', 'topBottom\s+-> Enter', 'Starting USBPcap2 monitoring', 'TAITO detected', 'TShark capture ended')) {
+                foreach ($expected in @('right\s+-> Space', 'left\s+-> Space', 'topLeft\s+-> \(disabled\)', 'topRight\s+-> \(disabled\)', 'topBottom\s+-> Enter', 'Input target: ALL APPLICATIONS', 'Starting USBPcap2 monitoring', 'TAITO detected', 'TShark capture ended')) {
                     if ($stdout -notmatch $expected) { throw "$mode launch missing '$expected': $stdout $stderr" }
                 }
                 if ($stderr -or $stdout -match 'Join-Path|Key down:|Key up:') { throw "$mode launch unexpected output: $stdout $stderr" }

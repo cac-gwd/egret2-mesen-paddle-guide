@@ -31,6 +31,19 @@ public static class ButtonTests
     public static int Run()
     {
         checks = 0;
+        // Validate native packet contents without injecting any keyboard input.
+        byte[] virtualKeys = { 0x20, 0x0D, 0x5A, 0x58, 0x25, 0x2E };
+        byte[] scanCodes = { 0x39, 0x1C, 0x2C, 0x2D, 0x4B, 0x53 };
+        for (int i = 0; i < virtualKeys.Length; i++)
+        {
+            KeyboardPacket down = new KeyboardPacket(virtualKeys[i], true);
+            KeyboardPacket up = new KeyboardPacket(virtualKeys[i], false);
+            uint extended = i >= 4 ? 1u : 0u;
+            Check(down.Key == virtualKeys[i] && down.ScanCode == scanCodes[i] && down.Flags == extended,
+                  "MAME-compatible key down packet " + virtualKeys[i]);
+            Check(up.Key == virtualKeys[i] && up.ScanCode == scanCodes[i] && up.Flags == (extended | 2u),
+                  "MAME-compatible key up packet " + virtualKeys[i]);
+        }
         string[] samples = { "0001000000", "8000000000", "0200000000", "0400000000", "1000000000" };
         for (int i = 0; i < samples.Length; i++)
         {
@@ -59,8 +72,7 @@ public static class ButtonTests
         }
 
         ButtonState state = new ButtonState(Mapping(false));
-        Check(state.SetFocus(true).Count == 0, "Initial focus");
-        Change(state.Report(1), 32, true, "Right down");
+        Change(state.Report(1), 32, true, "Right down without application activation");
         Check(state.Report(1).Count == 0, "Repeated report does not retrigger");
         Check(state.Report(3).Count == 0, "Second source does not retrigger Space");
         Check(state.Report(2).Count == 0, "Right release keeps Space held by left");
@@ -69,19 +81,19 @@ public static class ButtonTests
         Change(state.Report(16), 13, true, "Start down");
         Change(state.Report(17), 32, true, "Fire while Start held");
         Change(state.Report(1), 13, false, "Start release leaves Fire");
-        Change(state.SetFocus(false), 32, false, "Focus loss releases without a USB report");
-        Check(state.SetFocus(true).Count == 0, "Focus return does not replay held input");
-        Check(state.Report(1).Count == 0, "Held input remains blocked");
-        Check(state.Report(0).Count == 0, "Physical release rearms");
-        Change(state.Report(1), 32, true, "New press after focus return");
+        Check(state.Report(1).Count == 0, "Held input stays held without retriggering");
+        Change(state.Report(0), 32, false, "Physical release clears held key");
+        Change(state.Report(1), 32, true, "New press remains enabled");
         Change(state.Reset(), 32, false, "Shutdown releases held key");
         Check(state.Reset().Count == 0, "Repeated cleanup is harmless");
-        state.SetFocus(false);
-        Check(state.Report(16).Count == 0, "Background press ignored");
-        Check(state.SetFocus(true).Count == 0, "Background press not replayed");
-        state.Report(0);
-        Change(state.Report(16), 13, true, "Start rearmed");
-        state.Reset();
+        Change(state.Report(16), 13, true, "Input still enabled after reset");
+        Change(state.Reset(), 13, false, "Cleanup releases Enter");
+
+        ButtonState letters = new ButtonState(Mapping(true));
+        Change(letters.Report(2), 90, true, "Z works without application activation");
+        Change(letters.Report(6), 88, true, "X works alongside held Z");
+        Change(letters.Report(4), 90, false, "Z release keeps X held");
+        Change(letters.Reset(), 88, false, "Cleanup releases X");
 
         // Exhaustively compare every pair of physical button states, including duplicates.
         foreach (bool distinct in new bool[] { false, true })
@@ -91,7 +103,6 @@ public static class ButtonTests
                 for (int after = 0; after < 32; after++)
                 {
                     ButtonState model = new ButtonState(mapping);
-                    model.SetFocus(true);
                     model.Report(before);
                     List<KeyChange> changes = model.Report(after);
                     HashSet<byte> oldKeys = Keys(mapping, before), newKeys = Keys(mapping, after);
@@ -107,7 +118,6 @@ public static class ButtonTests
         }
 
         ReportRouter router = new ReportRouter(Mapping(false));
-        router.State.SetFocus(true);
         Check(router.ProcessLine("1\t17\t\t\t0001000000").Count == 0, "Ignore input before identification");
         router.ProcessLine("1\t17\t0x0ae4\t0x0701\t");
         Check(router.Notice != null, "Identify TAITO");
