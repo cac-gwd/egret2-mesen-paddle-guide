@@ -15,7 +15,7 @@ WindowsのMesen 2などで、イーグレットツーミニ パドル＆トラ�
 - Windows 10/11
 - イーグレットツーミニ パドル＆トラックボールコントローラ（VID `0AE4` / PID `0701`）
 - 使用するエミュレーター：[Mesen 2](https://github.com/SourMesen/Mesen2/releases)、[MesenCE](https://github.com/nesdev-org/MesenCE/releases)、またはMAME／MAMEUI（今回の追加検証はMAMEUI64 0.263.0）
-- [AutoHotkey v2](https://www.autohotkey.com/)
+- [AutoHotkey v2](https://www.autohotkey.com/) — **MAME／MAMEUIでも必要です。** インストール後、回転用の `mesen_spinner.ahk` を起動しておきます。
 - [Wireshark（TSharkを含む）](https://www.wireshark.org/download.html) と [USBPcap](https://github.com/desowin/usbpcap/releases)
 - Windows PowerShell 5.1（Windows標準搭載）
 - 自分で用意したゲームデータ（この配布物には含まれません）
@@ -40,6 +40,8 @@ WindowsのMesen 2などで、イーグレットツーミニ パドル＆トラ�
 
 ## MAME／MAMEUIで使う
 
+> **MAMEでもAutoHotkey v2が必要です。** このガイドの方式では、AutoHotkey v2をインストールし、`mesen_spinner.ahk` を起動した状態でプレイします。インストールだけでは回転の変換は始まりません。
+
 **動作確認環境：MAMEUI64 0.263.0（Feb 28 2024）、Windows、アルカノイド。** パドル回転と本体右ボタンでの発射が確認できています。確認に使ったゲーム設定は `arkanoidjb` です。
 
 ### 1. MAME側の入力方式を変更する
@@ -58,7 +60,7 @@ Windows版MAMEの標準のRawInputでは、今回のようなソフトウェア�
 
 ### 2. 回転とボタンの変換を両方起動する
 
-- `mesen_spinner.ahk` を起動します。これは回転の変換です。
+- **AutoHotkey v2をインストール**し、`mesen_spinner.ahk` をダブルクリックして起動します。MAMEで遊んでいる間も動かしておきます。これは回転の変換です。
 - コントローラのUSBを抜き、`START_FIRE.cmd` を起動してEnterを押します。監視開始後にUSBを挿し、`TAITO detected` を確認します。これはボタンの変換です。
 - 全アプリ版の起動画面には `Input target: ALL APPLICATIONS` と表示されます。
 - MAMEUIを起動し、アルカノイドを開きます。
